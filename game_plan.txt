@@ -1,0 +1,7 @@
+-Fetch players in challenger, GM and masters
+-Get each players their summonerID
+-Parse each summonerID to PUUID
+-For a specific PUUID, get the last 100 matches
+-For each match, find the total number of deaths
+-Do this for all players
+-Ranked them based on the number of deaths
