@@ -1,18 +1,16 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
 import pLimit from 'p-limit';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
-//const { createClient } = require('@supabase/supabase-js');
-
-// Create a limit function to control the rate of requests
-const limit = pLimit(5); // Set the limit to 20 requests per second
-
 // Replace with your own Supabase URL and Key
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
-//const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const email = 'jeremi1666@gmail.com'
+const password = process.env.SUPABASE_PASSWORD
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Define the Riot Games API endpoints
 const CHALLENGER_API_URL = 'https://na1.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5';
@@ -28,8 +26,25 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Authenticate User
+async function authenticateUser(email, password) {
+    const { user, session, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+    });
+
+    if (error) {
+        console.error('Error signing in:', error.message);
+        return null;
+    }
+
+    return session;
+}
+
 // Function to fetch data from the Challenger API and extract summoner IDs
 async function fetchSummonerIds() {
+    await authenticateUser(email, password)
+
     try {
         const response = await axios.get(CHALLENGER_API_URL, {
             headers: {
@@ -51,7 +66,11 @@ async function fetchSummonerIds() {
         const matchIds = await fetchMatchIds(puuid, 1);
         console.log(matchIds)
         
+        // Fetch player stats
         var stats = await fetchMatchSats(matchIds, puuid)
+
+        //Insert player to database
+        await addPlayerToDatabase(firstSummonerId, puuid, 'challenger', 'NA1');
 
     } catch (error) {
         console.error('Error fetching summoner IDs:', error.message);
@@ -146,6 +165,22 @@ async function fetchMatchSats(matchId, puuid) {
     } catch (error) {
         console.error('Error fetching match data:', error.message);
         return null;
+    }
+}
+
+async function addPlayerToDatabase(summonerID, PUUID, rank, region) {
+    try {
+        const { data, error } = await supabase
+            .from('Players')
+            .insert([{ summonerID, PUUID, region, rank }]);
+
+        if (error) {
+            console.error('Error inserting data into Supabase:', error.message);
+        } else {
+            console.log('Player added to the database:', data);
+        }
+    } catch (error) {
+        console.error('Unexpected error:', error.message);
     }
 }
 
