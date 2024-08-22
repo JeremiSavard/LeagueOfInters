@@ -63,14 +63,14 @@ async function fetchSummonerIds() {
         const puuid = puuidResponse.puuid;  // Extract the actual puuid string
         
         // Fetch match IDs
-        const matchIds = await fetchMatchIds(puuid, 1);
+        const matchIds = await fetchMatchIds(puuid, 50);
         console.log(matchIds)
         
         // Fetch player stats
         var stats = await fetchMatchSats(matchIds, puuid)
 
         //Insert player to database
-        await addPlayerToDatabase(firstSummonerId, puuid, 'challenger', 'NA1');
+        //await addPlayerToDatabase(firstSummonerId, puuid, 'challenger', 'NA1');
 
     } catch (error) {
         console.error('Error fetching summoner IDs:', error.message);
@@ -118,7 +118,7 @@ async function fetchMatches(puuid) {
     }
 }
 
-// Function to fetch PUUID for a single summoner ID
+// Function to fetch a number of matches for a specific PUUID
 async function fetchMatchIds(puuid,nbMatches) {
     console.log(puuid)
     try {
@@ -136,36 +136,40 @@ async function fetchMatchIds(puuid,nbMatches) {
     }
 }
 
-// Function to fetch PUUID for a single summoner ID
-async function fetchMatchSats(matchId, puuid) {
-    try {
-        const response = await axios.get(`${MATCH_STATS_API_URL}${matchId}`, {
-            headers: {
-                'X-Riot-Token': API_KEY
+// Function to fetch player stats for a specific PUUID and matchId
+async function fetchMatchSats(matchIds, puuid) {
+    let totalTimeSpentDead = 0;
+    let totalDeaths = 0;
+    for (const matchId of matchIds){
+        try {
+            const response = await axios.get(`${MATCH_STATS_API_URL}${matchId}`, {
+                headers: {
+                    'X-Riot-Token': API_KEY
+                }
+            });
+        
+            const matchData = response.data;
+
+            // Find the participant with the matching `puuid`
+            const participant = matchData.info.participants.find(p => p.puuid === puuid);
+    
+            if (participant) {
+                totalTimeSpentDead += participant.totalTimeSpentDead;
+                const participantId = participant.puuid
+                totalDeaths += participant.deaths;
+                console.log(`totalTimeSpentDead : ${totalTimeSpentDead}, totalDeaths: ${totalDeaths}, participantId: ${participantId}`)
+            } else {
+                console.error(`PUUID: ${puuid} not found in the match data.`);
+                return null;
             }
-        });
-
-        const matchData = response.data;
-
-        // Find the participant with the matching `puuid`
-        const participant = matchData.info.participants.find(p => p.puuid === puuid);
-
-        if (participant) {
-            const totalTimeSpentDead = participant.totalTimeSpentDead;
-            console.log(`PUUID: ${puuid}, Total Time Spent Dead: ${totalTimeSpentDead}`);
-
-            const deaths = participant.deaths;
-            console.log(`PUUID: ${puuid}, Total Deaths: ${deaths}`);
-            return totalTimeSpentDead, deaths;
-        } else {
-            console.error(`PUUID: ${puuid} not found in the match data.`);
+    
+        } catch (error) {
+            console.error('Error fetching match data:', error.message);
             return null;
         }
-
-    } catch (error) {
-        console.error('Error fetching match data:', error.message);
-        return null;
     }
+    console.log(`totalTimeSpentDead : ${totalTimeSpentDead}, totalDeaths: ${totalDeaths}`)
+    return totalTimeSpentDead, totalDeaths;
 }
 
 async function addPlayerToDatabase(summonerID, PUUID, rank, region) {
