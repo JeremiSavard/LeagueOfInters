@@ -26,6 +26,29 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function main(){
+    await authenticateUser(email, password)
+    // For testing, limit to the first summoner ID
+    const summonerId = await fetchSummonerIds()
+    const firstSummonerId = summonerId[0]
+
+    // Fetch PUUIDs for each summoner ID with rate limiting
+    const puuidResponse = await fetchPuuid(firstSummonerId);
+    const puuid = puuidResponse.puuid;  // Extract the actual puuid string
+    
+    // Fetch match IDs
+    const matchIds = await fetchMatchIds(puuid, 50);
+    console.log(matchIds)
+    
+    // Fetch player stats
+    var { totalTimeSpentDead, totalDeaths } = await fetchMatchSats(matchIds, puuid)
+    console.log(totalTimeSpentDead)
+    console.log(totalDeaths)
+
+    //Insert player to database
+    await addPlayerToDatabase(firstSummonerId, puuid, 'challenger', 'NA1');
+    await addPlayerStatsToDatabase(puuid, totalTimeSpentDead, totalDeaths);
+}
 // Authenticate User
 async function authenticateUser(email, password) {
     const { user, session, error } = await supabase.auth.signInWithPassword({
@@ -43,8 +66,6 @@ async function authenticateUser(email, password) {
 
 // Function to fetch data from the Challenger API and extract summoner IDs
 async function fetchSummonerIds() {
-    await authenticateUser(email, password)
-
     try {
         const response = await axios.get(CHALLENGER_API_URL, {
             headers: {
@@ -54,23 +75,8 @@ async function fetchSummonerIds() {
 
         const data = response.data;
         const summonerIds = data.entries.map(entry => entry.summonerId);
-        
-        // For testing, limit to the first summoner ID
-        const firstSummonerId = summonerIds[0];
-
-        // Fetch PUUIDs for each summoner ID with rate limiting
-        const puuidResponse = await fetchPuuid(firstSummonerId);
-        const puuid = puuidResponse.puuid;  // Extract the actual puuid string
-        
-        // Fetch match IDs
-        const matchIds = await fetchMatchIds(puuid, 50);
-        console.log(matchIds)
-        
-        // Fetch player stats
-        var stats = await fetchMatchSats(matchIds, puuid)
-
-        //Insert player to database
-        //await addPlayerToDatabase(firstSummonerId, puuid, 'challenger', 'NA1');
+        console.log(summonerIds)
+        return summonerIds
 
     } catch (error) {
         console.error('Error fetching summoner IDs:', error.message);
@@ -157,7 +163,6 @@ async function fetchMatchSats(matchIds, puuid) {
                 totalTimeSpentDead += participant.totalTimeSpentDead;
                 const participantId = participant.puuid
                 totalDeaths += participant.deaths;
-                console.log(`totalTimeSpentDead : ${totalTimeSpentDead}, totalDeaths: ${totalDeaths}, participantId: ${participantId}`)
             } else {
                 console.error(`PUUID: ${puuid} not found in the match data.`);
                 return null;
@@ -169,7 +174,7 @@ async function fetchMatchSats(matchIds, puuid) {
         }
     }
     console.log(`totalTimeSpentDead : ${totalTimeSpentDead}, totalDeaths: ${totalDeaths}`)
-    return totalTimeSpentDead, totalDeaths;
+    return { totalTimeSpentDead, totalDeaths};
 }
 
 async function addPlayerToDatabase(summonerID, PUUID, rank, region) {
@@ -188,5 +193,21 @@ async function addPlayerToDatabase(summonerID, PUUID, rank, region) {
     }
 }
 
+async function addPlayerStatsToDatabase(PUUID, totalTimeSpentDead_100, nbDeaths_100) {
+    try {
+        const { data, error } = await supabase
+            .from('Player_Stats')
+            .insert([{ PUUID, totalTimeSpentDead_100, nbDeaths_100 }]);
+
+        if (error) {
+            console.error('Error inserting data into Supabase:', error.message);
+        } else {
+            console.log('Player stats added to the database:', data);
+        }
+    } catch (error) {
+        console.error('Unexpected error:', error.message);
+    }
+}
+
 // Execute the function to start the process
-fetchSummonerIds();
+main();
