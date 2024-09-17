@@ -2,12 +2,16 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
+import PocketBase from 'pocketbase';
+
+const pb = new PocketBase('http://127.0.0.1:8090');
 
 dotenv.config();
 
 // Replace with your own Supabase URL and Key
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const pocketbase_password = process.env.POCKETBASE_PASSWORD
 const email = 'jeremi1666@gmail.com'
 const password = process.env.SUPABASE_PASSWORD
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -21,9 +25,19 @@ const MATCH_STATS_API_URL = 'https://americas.api.riotgames.com/lol/match/v5/mat
 // Get the API key from environment variables
 const API_KEY = process.env.RIOT_API_KEY_DEV; // Ensure you have RIOT_API_KEY in your .env file
 
+const authData = await pb.admins.authWithPassword(email, pocketbase_password);
+
 // Function to introduce a delay
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function test_pb() {
+    // you can also fetch all records at once via getFullList
+    const records = await pb.collection('Regions').getFullList({
+    sort: '-created',
+    });
+    console.log(records)
 }
 
 async function main(){
@@ -210,4 +224,4 @@ async function addPlayerStatsToDatabase(PUUID, totalTimeSpentDead_100, nbDeaths_
 }
 
 // Execute the function to start the process
-main();
+test_pb();
